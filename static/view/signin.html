@@ -80,6 +80,7 @@
         }
       },
       success: function (body, textStatus, jqXHR) {
+        alert(textStatus)
         var resp = JSON.parse(body);
         localStorage.setItem("token", resp.data.Token)
         localStorage.setItem("username", resp.data.Username)
