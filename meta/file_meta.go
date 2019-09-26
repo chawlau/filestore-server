@@ -1,7 +1,11 @@
 package meta
 
-import "sort"
-import mydb "filestore-server/db"
+import (
+	mydb "filestore-server/db"
+	"sort"
+
+	"github.com/golang/glog"
+)
 
 type FileMeta struct {
 	FileSha1 string
@@ -31,19 +35,20 @@ func GetFileMeta(fileSha1 string) FileMeta {
 	return fileMetas[fileSha1]
 }
 
-func GetFileMetaDB(fileSha1 string) (FileMeta, error) {
+func GetFileMetaDB(fileSha1 string) (fmeta *FileMeta, err error) {
 	tfile, err := mydb.GetFileMeta(fileSha1)
 	if err != nil {
-		return FileMeta{}, err
+		glog.Info("GetFileMetaDB failed err " + err.Error())
+		return
 	}
 
-	fmeta := FileMeta{
+	fmeta = &FileMeta{
 		FileSha1: tfile.FileHash,
 		FileName: tfile.FileName.String,
 		FileSize: tfile.FileSize.Int64,
 		Location: tfile.FileAddr.String,
 	}
-	return fmeta, nil
+	return
 }
 
 func GetLastFileMetas(count int) []FileMeta {

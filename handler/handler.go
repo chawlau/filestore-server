@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/golang/glog"
@@ -59,7 +60,17 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 		//meta.UpdateFileMeta(fileMeta)
 		_ = meta.UpdateFileMetaDB(fileMeta)
 
-		http.Redirect(w, r, "/file/upload/suc", http.StatusFound)
+		//TODO更新用户文件表记录
+		r.ParseForm()
+		userName := r.Form.Get("username")
+		suc := dblayer.OnUserFileUploadFinished(userName, fileMeta.FileSha1,
+			fileMeta.FileName, fileMeta.FileSize)
+
+		if suc {
+			http.Redirect(w, r, "/static/view/home.html", http.StatusFound)
+		} else {
+			w.Write([]byte("Upload Failed"))
+		}
 	}
 }
 
@@ -81,6 +92,28 @@ func GetFileMetaHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data, err := json.Marshal(fMeta)
+
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Write(data)
+}
+
+//批量获取文件元信息
+func FileQueryHandler(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+
+	limitCnt, _ := strconv.Atoi(r.Form.Get("limit"))
+	userName := r.Form.Get("username")
+	//fMeta := meta.GetFileMeta(filehash)
+	userFiles, err := dblayer.QueryUserFileMetas(userName, limitCnt)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	data, err := json.Marshal(userFiles)
 
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -263,4 +296,53 @@ func GenToken(userName string) string {
 	ts := fmt.Sprintf("%x", time.Now().Unix())
 	tokenPrefix := util.MD5([]byte(userName + ts + "_tokensalt"))
 	return tokenPrefix + ts[:8]
+}
+
+func TryFastUploadHandler(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+
+	userName := r.Form.Get("username")
+	fileHash := r.Form.Get("filehash")
+	fileName := r.Form.Get("filename")
+	fileSize, _ := strconv.Atoi(r.Form.Get("filesize"))
+
+	//从文件表中查询相同hash的文件记录
+	fileMeta, err := meta.GetFileMetaDB(fileHash)
+
+	if err != nil {
+		fmt.Println("meta err ", err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	//如果查询不到返回秒传失败
+	if fileMeta == nil {
+		resp := &util.RespMsg{
+			Code: -1,
+			Msg:  "FastUpload failed ,visit normal upload interface",
+		}
+
+		w.Write(resp.JSONBytes())
+		return
+	}
+
+	suc := dblayer.OnUserFileUploadFinished(userName, fileHash,
+		fileName, int64(fileSize))
+
+	if !suc {
+		resp := &util.RespMsg{
+			Code: -2,
+			Msg:  "FastUpload failed, try later",
+		}
+		w.Write(resp.JSONBytes())
+		return
+	}
+
+	//如果文件已经上传过则将文件信息写入用户文件表, 返回成功
+	resp := &util.RespMsg{
+		Code: 0,
+		Msg:  "FastUpload SUCCESS",
+	}
+	w.Write(resp.JSONBytes())
+	return
 }
