@@ -16,7 +16,14 @@ func main() {
 	http.HandleFunc("/file/download", handler.DownloadHandler)
 	http.HandleFunc("/file/update", handler.FileMetaUpdateHandler)
 	http.HandleFunc("/file/delete", handler.FileDeleteHandler)
+
+	//秒传接口
 	http.HandleFunc("/file/fastupload", handler.TryFastUploadHandler)
+
+	//分块上传
+	http.HandleFunc("/file/mpupload/init", handler.InitalMultipartUploadHandler)
+	http.HandleFunc("/file/mpupload/uppart", handler.UploadPartHandler)
+	http.HandleFunc("/file/mpupload/complete", handler.CompleteUploadHandler)
 
 	http.HandleFunc("/user/signup", handler.SignupHandler)
 	http.HandleFunc("/user/signin", handler.SigninHandler)
